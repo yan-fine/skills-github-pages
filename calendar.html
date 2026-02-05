@@ -565,8 +565,18 @@
 
         async function verifyAndConnect() {
             try {
-                // Store the access code in Firebase for rules validation
-                await set(ref(database, 'accessCode'), accessPassword);
+                // Read the stored access code from Firebase to verify password
+                const accessCodeRef = ref(database, 'accessCode');
+                const snapshot = await get(accessCodeRef);
+                const storedPassword = snapshot.val();
+                
+                if (!storedPassword) {
+                    // First time setup - store the password
+                    await set(accessCodeRef, accessPassword);
+                } else if (storedPassword !== accessPassword) {
+                    // Password mismatch
+                    throw new Error('Invalid password');
+                }
                 
                 // Set up real-time listener
                 const availabilityRef = ref(database, 'availability');
@@ -697,10 +707,6 @@
             }
             
             const timeNote = document.getElementById('timeInput').value.trim();
-            
-            // Ensure access code is set
-            await set(ref(database, 'accessCode'), accessPassword);
-            
             const dateRef = ref(database, `availability/${currentSelectedDate}`);
             const snapshot = await get(dateRef);
             const data = snapshot.val() || {};
@@ -719,9 +725,6 @@
                 alert('Please authenticate first');
                 return;
             }
-            
-            // Ensure access code is set
-            await set(ref(database, 'accessCode'), accessPassword);
             
             const dateRef = ref(database, `availability/${currentSelectedDate}`);
             const snapshot = await get(dateRef);
