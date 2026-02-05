@@ -450,11 +450,12 @@
         <p class="subtitle">Click on dates when you're available to meet up!</p>
 
         <div class="user-input">
+            <input type="password" id="passwordInput" placeholder="Enter calendar password" style="display:none;">
             <input type="text" id="nameInput" placeholder="Enter your name" maxlength="20">
-            <button onclick="setUser()">Set Name</button>
+            <button onclick="authenticate()">Start</button>
         </div>
 
-        <div class="current-user" id="currentUser">Please enter your name to start</div>
+        <div class="current-user" id="currentUser">Please enter the calendar password and your name</div>
 
         <div class="calendar-controls">
             <div class="month-nav">
@@ -546,33 +547,77 @@
 
         // Global state
         let currentUser = localStorage.getItem('userName') || '';
+        let accessPassword = localStorage.getItem('calendarPassword') || '';
         let currentMonth = new Date().getMonth();
         let currentYear = new Date().getFullYear();
         let availabilityData = {};
+        let isAuthenticated = false;
 
-        // Set up real-time listener
-        const availabilityRef = ref(database, 'availability');
-        onValue(availabilityRef, (snapshot) => {
-            availabilityData = snapshot.val() || {};
-            renderCalendar();
-            updateParticipantsList();
-        });
-
-        // Set user name
-        window.setUser = function() {
-            const name = document.getElementById('nameInput').value.trim();
-            if (name) {
-                currentUser = name;
-                localStorage.setItem('userName', name);
-                document.getElementById('currentUser').textContent = `Signed in as: ${currentUser}`;
-                document.getElementById('nameInput').value = '';
+        // Check if already authenticated
+        if (accessPassword) {
+            document.getElementById('passwordInput').style.display = 'none';
+            if (currentUser) {
+                verifyAndConnect();
             }
-        };
-
-        // Initialize user if stored
-        if (currentUser) {
-            document.getElementById('currentUser').textContent = `Signed in as: ${currentUser}`;
+        } else {
+            document.getElementById('passwordInput').style.display = 'inline-block';
         }
+
+        async function verifyAndConnect() {
+            try {
+                // Store the access code in Firebase for rules validation
+                await set(ref(database, 'accessCode'), accessPassword);
+                
+                // Set up real-time listener
+                const availabilityRef = ref(database, 'availability');
+                onValue(availabilityRef, (snapshot) => {
+                    availabilityData = snapshot.val() || {};
+                    renderCalendar();
+                    updateParticipantsList();
+                });
+                
+                isAuthenticated = true;
+                document.getElementById('currentUser').textContent = `Signed in as: ${currentUser}`;
+            } catch (error) {
+                console.error('Authentication error:', error);
+                alert('Invalid password! Please try again.');
+                localStorage.removeItem('calendarPassword');
+                localStorage.removeItem('userName');
+                accessPassword = '';
+                currentUser = '';
+                document.getElementById('passwordInput').style.display = 'inline-block';
+                document.getElementById('currentUser').textContent = 'Please enter the calendar password and your name';
+            }
+        }
+
+        // Authenticate user
+        window.authenticate = async function() {
+            const password = document.getElementById('passwordInput').value.trim();
+            const name = document.getElementById('nameInput').value.trim();
+            
+            if (!accessPassword && !password) {
+                alert('Please enter the calendar password');
+                return;
+            }
+            
+            if (!name) {
+                alert('Please enter your name');
+                return;
+            }
+            
+            if (password) {
+                accessPassword = password;
+                localStorage.setItem('calendarPassword', password);
+                document.getElementById('passwordInput').style.display = 'none';
+            }
+            
+            currentUser = name;
+            localStorage.setItem('userName', name);
+            document.getElementById('nameInput').value = '';
+            document.getElementById('passwordInput').value = '';
+            
+            await verifyAndConnect();
+        };
 
         // Month navigation
         window.previousMonth = function() {
@@ -646,7 +691,16 @@
         };
 
         window.saveTime = async function() {
+            if (!isAuthenticated) {
+                alert('Please authenticate first');
+                return;
+            }
+            
             const timeNote = document.getElementById('timeInput').value.trim();
+            
+            // Ensure access code is set
+            await set(ref(database, 'accessCode'), accessPassword);
+            
             const dateRef = ref(database, `availability/${currentSelectedDate}`);
             const snapshot = await get(dateRef);
             const data = snapshot.val() || {};
@@ -661,6 +715,14 @@
         };
 
         window.removeAvailability = async function() {
+            if (!isAuthenticated) {
+                alert('Please authenticate first');
+                return;
+            }
+            
+            // Ensure access code is set
+            await set(ref(database, 'accessCode'), accessPassword);
+            
             const dateRef = ref(database, `availability/${currentSelectedDate}`);
             const snapshot = await get(dateRef);
             const data = snapshot.val() || {};
