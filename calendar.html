@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Meeting Calendar</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .user-input {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .user-input input {
+            padding: 12px 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .user-input input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .user-input button {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .user-input button:hover {
+            background: #5568d3;
+        }
+
+        .current-user {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .calendar-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .month-nav {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .month-nav button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+
+        .month-nav button:hover {
+            background: #5568d3;
+        }
+
+        .month-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+            min-width: 200px;
+            text-align: center;
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 2px solid #ddd;
+        }
+
+        .calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .day-header {
+            text-align: center;
+            font-weight: bold;
+            padding: 15px;
+            color: #667eea;
+            font-size: 14px;
+        }
+
+        .day {
+            aspect-ratio: 1;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            background: white;
+            padding: 8px;
+        }
+
+        .day:hover:not(.empty):not(.other-month) {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .day.empty {
+            cursor: default;
+            border: none;
+        }
+
+        .day.other-month {
+            opacity: 0.3;
+            cursor: default;
+        }
+
+        .day.other-month:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .day-number {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .availability-count {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .users-list {
+            font-size: 10px;
+            color: #888;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Color coding based on availability */
+        .day[data-count="0"] {
+            background: white;
+        }
+
+        .day[data-count="1"] {
+            background: #fee;
+            border-color: #fcc;
+        }
+
+        .day[data-count="2"] {
+            background: #ffd;
+            border-color: #ffb;
+        }
+
+        .day[data-count="3"] {
+            background: #efe;
+            border-color: #cfc;
+        }
+
+        .day[data-count="4"],
+        .day[data-count="5"],
+        .day[data-count="6"],
+        .day[data-count="7"],
+        .day[data-count="8"],
+        .day[data-count="9"] {
+            background: #cfc;
+            border-color: #8f8;
+        }
+
+        .day.selected {
+            border-color: #667eea;
+            border-width: 3px;
+            background: #e8ebfa !important;
+        }
+
+        .participants {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 12px;
+        }
+
+        .participants h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .participants-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .participant-tag {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .calendar {
+                gap: 5px;
+            }
+
+            .day {
+                padding: 4px;
+            }
+
+            .day-number {
+                font-size: 14px;
+            }
+
+            .availability-count {
+                font-size: 10px;
+            }
+
+            .users-list {
+                display: none;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .month-title {
+                font-size: 1.2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📅 Group Meeting Planner</h1>
+        <p class="subtitle">Click on dates when you're available to meet up!</p>
+
+        <div class="user-input">
+            <input type="text" id="nameInput" placeholder="Enter your name" maxlength="20">
+            <button onclick="setUser()">Set Name</button>
+        </div>
+
+        <div class="current-user" id="currentUser">Please enter your name to start</div>
+
+        <div class="calendar-controls">
+            <div class="month-nav">
+                <button onclick="previousMonth()">← Previous</button>
+                <div class="month-title" id="monthTitle"></div>
+                <button onclick="nextMonth()">Next →</button>
+            </div>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: white;"></div>
+                    <span>No one</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #fee;"></div>
+                    <span>1 person</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #ffd;"></div>
+                    <span>2 people</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #efe;"></div>
+                    <span>3 people</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #cfc;"></div>
+                    <span>4+ people</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="calendar" id="calendar"></div>
+
+        <div class="participants">
+            <h3>Participants</h3>
+            <div class="participants-list" id="participantsList">
+                <span style="color: #999;">No participants yet</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, onValue, set, get, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+        // Firebase configuration
+        // REPLACE THIS WITH YOUR OWN FIREBASE CONFIG
+        const firebaseConfig = {
+
+        apiKey: "AIzaSyD_oJAkWBM-Pb9_DUPFlZOCeeHMYY0xeY4",
+
+        authDomain: "verfuegbarkeiten-kalender.firebaseapp.com",
+
+        databaseURL: "https://verfuegbarkeiten-kalender-default-rtdb.europe-west1.firebasedatabase.app",
+
+        projectId: "verfuegbarkeiten-kalender",
+
+        storageBucket: "verfuegbarkeiten-kalender.firebasestorage.app",
+
+        messagingSenderId: "464213957773",
+
+        appId: "1:464213957773:web:d2753f22bf46ffdf8096c4"
+
+        };
+
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // Global state
+        let currentUser = localStorage.getItem('userName') || '';
+        let currentMonth = new Date().getMonth();
+        let currentYear = new Date().getFullYear();
+        let availabilityData = {};
+
+        // Set up real-time listener
+        const availabilityRef = ref(database, 'availability');
+        onValue(availabilityRef, (snapshot) => {
+            availabilityData = snapshot.val() || {};
+            renderCalendar();
+            updateParticipantsList();
+        });
+
+        // Set user name
+        window.setUser = function() {
+            const name = document.getElementById('nameInput').value.trim();
+            if (name) {
+                currentUser = name;
+                localStorage.setItem('userName', name);
+                document.getElementById('currentUser').textContent = `Signed in as: ${currentUser}`;
+                document.getElementById('nameInput').value = '';
+            }
+        };
+
+        // Initialize user if stored
+        if (currentUser) {
+            document.getElementById('currentUser').textContent = `Signed in as: ${currentUser}`;
+        }
+
+        // Month navigation
+        window.previousMonth = function() {
+            currentMonth--;
+            if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            renderCalendar();
+        };
+
+        window.nextMonth = function() {
+            currentMonth++;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            }
+            renderCalendar();
+        };
+
+        // Toggle date availability
+        window.toggleDate = async function(dateStr) {
+            if (!currentUser) {
+                alert('Please enter your name first!');
+                return;
+            }
+
+            const dateRef = ref(database, `availability/${dateStr}`);
+            const snapshot = await get(dateRef);
+            const users = snapshot.val() || [];
+
+            if (users.includes(currentUser)) {
+                // Remove user
+                const updated = users.filter(u => u !== currentUser);
+                if (updated.length === 0) {
+                    await remove(dateRef);
+                } else {
+                    await set(dateRef, updated);
+                }
+            } else {
+                // Add user
+                await set(dateRef, [...users, currentUser]);
+            }
+        };
+
+        // Render calendar
+        function renderCalendar() {
+            const calendar = document.getElementById('calendar');
+            const monthTitle = document.getElementById('monthTitle');
+
+            // Set month title
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                              'July', 'August', 'September', 'October', 'November', 'December'];
+            monthTitle.textContent = `${monthNames[currentMonth]} ${currentYear}`;
+
+            // Clear calendar
+            calendar.innerHTML = '';
+
+            // Add day headers
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            days.forEach(day => {
+                const header = document.createElement('div');
+                header.className = 'day-header';
+                header.textContent = day;
+                calendar.appendChild(header);
+            });
+
+            // Get first day of month and number of days
+            const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            const daysInPrevMonth = new Date(currentYear, currentMonth, 0).getDate();
+
+            // Add empty cells for days before month starts
+            for (let i = 0; i < firstDay; i++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'day other-month';
+                const prevMonthDay = daysInPrevMonth - firstDay + i + 1;
+                emptyDay.innerHTML = `<div class="day-number">${prevMonthDay}</div>`;
+                calendar.appendChild(emptyDay);
+            }
+
+            // Add days of current month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const users = availabilityData[dateStr] || [];
+                const count = users.length;
+
+                const dayDiv = document.createElement('div');
+                dayDiv.className = 'day';
+                dayDiv.setAttribute('data-count', Math.min(count, 9));
+                
+                if (users.includes(currentUser)) {
+                    dayDiv.classList.add('selected');
+                }
+
+                dayDiv.innerHTML = `
+                    <div class="day-number">${day}</div>
+                    ${count > 0 ? `<div class="availability-count">${count} available</div>` : ''}
+                    ${count > 0 ? `<div class="users-list">${users.join(', ')}</div>` : ''}
+                `;
+
+                dayDiv.onclick = () => toggleDate(dateStr);
+                calendar.appendChild(dayDiv);
+            }
+
+            // Add empty cells for days after month ends
+            const totalCells = firstDay + daysInMonth;
+            const remainingCells = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+            for (let i = 1; i <= remainingCells; i++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'day other-month';
+                emptyDay.innerHTML = `<div class="day-number">${i}</div>`;
+                calendar.appendChild(emptyDay);
+            }
+        }
+
+        // Update participants list
+        function updateParticipantsList() {
+            const participantsList = document.getElementById('participantsList');
+            const allUsers = new Set();
+
+            Object.values(availabilityData).forEach(users => {
+                users.forEach(user => allUsers.add(user));
+            });
+
+            if (allUsers.size === 0) {
+                participantsList.innerHTML = '<span style="color: #999;">No participants yet</span>';
+            } else {
+                participantsList.innerHTML = Array.from(allUsers)
+                    .map(user => `<div class="participant-tag">${user}</div>`)
+                    .join('');
+            }
+        }
+
+        // Initial render
+        renderCalendar();
+    </script>
+</body>
+</html>
