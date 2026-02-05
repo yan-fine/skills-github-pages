@@ -273,6 +273,146 @@
             font-size: 14px;
         }
 
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            animation: slideDown 0.3s;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            color: #333;
+            font-size: 1.5em;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 20px;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .time-input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .time-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .modal-button.primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .modal-button.primary:hover {
+            background: #5568d3;
+        }
+
+        .modal-button.secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .modal-button.secondary:hover {
+            background: #d0d0d0;
+        }
+
+        .modal-button.danger {
+            background: #ff4444;
+            color: white;
+        }
+
+        .modal-button.danger:hover {
+            background: #cc0000;
+        }
+
+        .availability-list {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .availability-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .availability-item strong {
+            color: #333;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .availability-item .time-note {
+            color: #666;
+            font-size: 14px;
+        }
+
         @media (max-width: 768px) {
             .calendar {
                 gap: 5px;
@@ -356,6 +496,24 @@
         </div>
     </div>
 
+    <!-- Time Modal -->
+    <div id="timeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalDate">Select Time</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <p style="color: #666; margin-bottom: 15px;">Add a time or note for your availability:</p>
+            <input type="text" id="timeInput" class="time-input" placeholder="e.g., 2pm-5pm, After 3, Evening only">
+            <div class="modal-buttons">
+                <button class="modal-button secondary" onclick="closeModal()">Cancel</button>
+                <button class="modal-button danger" id="removeBtn" onclick="removeAvailability()" style="display:none;">Remove</button>
+                <button class="modal-button primary" onclick="saveTime()">Save</button>
+            </div>
+            <div class="availability-list" id="availabilityList"></div>
+        </div>
+    </div>
+
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
@@ -435,28 +593,117 @@
             renderCalendar();
         };
 
-        // Toggle date availability
-        window.toggleDate = async function(dateStr) {
+        // Modal variables
+        let currentSelectedDate = '';
+
+        // Open modal for date
+        window.toggleDate = function(dateStr) {
             if (!currentUser) {
                 alert('Please enter your name first!');
                 return;
             }
+            currentSelectedDate = dateStr;
+            openModal(dateStr);
+        };
 
+        window.openModal = async function(dateStr) {
+            const modal = document.getElementById('timeModal');
+            const dateObj = new Date(dateStr + 'T12:00:00');
+            const dateFormatted = dateObj.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            document.getElementById('modalDate').textContent = dateFormatted;
+            
+            // Check if user already has availability for this date
             const dateRef = ref(database, `availability/${dateStr}`);
             const snapshot = await get(dateRef);
-            const users = snapshot.val() || [];
-
-            if (users.includes(currentUser)) {
-                // Remove user
-                const updated = users.filter(u => u !== currentUser);
-                if (updated.length === 0) {
-                    await remove(dateRef);
-                } else {
-                    await set(dateRef, updated);
-                }
+            const data = snapshot.val() || {};
+            
+            const userAvailability = data[currentUser];
+            const timeInput = document.getElementById('timeInput');
+            const removeBtn = document.getElementById('removeBtn');
+            
+            if (userAvailability) {
+                timeInput.value = userAvailability.time || '';
+                removeBtn.style.display = 'inline-block';
             } else {
-                // Add user
-                await set(dateRef, [...users, currentUser]);
+                timeInput.value = '';
+                removeBtn.style.display = 'none';
+            }
+            
+            // Show all availabilities for this date
+            displayAvailabilities(data);
+            
+            modal.style.display = 'block';
+            timeInput.focus();
+        };
+
+        window.closeModal = function() {
+            document.getElementById('timeModal').style.display = 'none';
+        };
+
+        window.saveTime = async function() {
+            const timeNote = document.getElementById('timeInput').value.trim();
+            const dateRef = ref(database, `availability/${currentSelectedDate}`);
+            const snapshot = await get(dateRef);
+            const data = snapshot.val() || {};
+            
+            data[currentUser] = {
+                time: timeNote,
+                timestamp: Date.now()
+            };
+            
+            await set(dateRef, data);
+            closeModal();
+        };
+
+        window.removeAvailability = async function() {
+            const dateRef = ref(database, `availability/${currentSelectedDate}`);
+            const snapshot = await get(dateRef);
+            const data = snapshot.val() || {};
+            
+            delete data[currentUser];
+            
+            if (Object.keys(data).length === 0) {
+                await remove(dateRef);
+            } else {
+                await set(dateRef, data);
+            }
+            
+            closeModal();
+        };
+
+        function displayAvailabilities(data) {
+            const list = document.getElementById('availabilityList');
+            
+            if (!data || Object.keys(data).length === 0) {
+                list.innerHTML = '';
+                return;
+            }
+            
+            let html = '<h3 style="margin-top: 20px; margin-bottom: 10px; color: #333; font-size: 1.1em;">Who\'s Available:</h3>';
+            
+            Object.entries(data).forEach(([user, info]) => {
+                const timeText = info.time ? info.time : 'Available';
+                html += `
+                    <div class="availability-item">
+                        <strong>${user}</strong>
+                        <div class="time-note">${timeText}</div>
+                    </div>
+                `;
+            });
+            
+            list.innerHTML = html;
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('timeModal');
+            if (event.target === modal) {
+                closeModal();
             }
         };
 
@@ -499,14 +746,16 @@
             // Add days of current month
             for (let day = 1; day <= daysInMonth; day++) {
                 const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const users = availabilityData[dateStr] || [];
+                const dateData = availabilityData[dateStr] || {};
+                const users = Object.keys(dateData);
                 const count = users.length;
 
                 const dayDiv = document.createElement('div');
                 dayDiv.className = 'day';
                 dayDiv.setAttribute('data-count', Math.min(count, 9));
                 
-                if (users.includes(currentUser)) {
+                // Check if current user is available on this date
+                if (currentUser && dateData[currentUser]) {
                     dayDiv.classList.add('selected');
                 }
 
@@ -536,8 +785,8 @@
             const participantsList = document.getElementById('participantsList');
             const allUsers = new Set();
 
-            Object.values(availabilityData).forEach(users => {
-                users.forEach(user => allUsers.add(user));
+            Object.values(availabilityData).forEach(dateData => {
+                Object.keys(dateData).forEach(user => allUsers.add(user));
             });
 
             if (allUsers.size === 0) {
